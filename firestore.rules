@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Deny all writes by default.
+    // Privileged mutations (certificates, revocations, jobs, audit logs) are performed strictly
+    // via Firebase Admin SDK on authorized server routes.
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isStaff() {
+      return isSignedIn() && (
+        request.auth.token.role == 'university_admin' ||
+        request.auth.token.role == 'issuer'
+      );
+    }
+
+    // User profiles: users can read their own profile, cannot modify roles
+    match /users/{userId} {
+      allow read: if isSelf(userId) || isStaff();
+      allow write: if false; // Only server Firebase Admin can modify user profiles & roles
+    }
+
+    // Institution details: staff can read
+    match /institutions/{institutionId} {
+      allow read: if isStaff();
+      allow write: if false; // Only server Firebase Admin
+    }
+
+    // Certificates:
+    // Staff can read full records for their institution.
+    // Writes are strictly server-side (Admin SDK).
+    match /certificates/{certificateId} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // Audit events & Issuance jobs: strict server-only
+    match /auditEvents/{eventId} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    match /issuanceJobs/{jobId} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+  }
+}
