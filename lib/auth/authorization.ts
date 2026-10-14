@@ -41,14 +41,18 @@ export async function authenticateRequest(
       role = decoded.role as UserRole;
     } else if (adminDb) {
       // Check user document in Firestore as fallback
-      const userDoc = await adminDb.collection("users").doc(decoded.uid).get();
-      if (userDoc.exists) {
-        const data = userDoc.data();
-        if (data?.role) {
-          role = data.role as UserRole;
-          institutionId = data.institutionId || institutionId;
-          institutionName = data.institutionName || institutionName;
+      try {
+        const userDoc = await adminDb.collection("users").doc(decoded.uid).get();
+        if (userDoc.exists) {
+          const data = userDoc.data();
+          if (data?.role) {
+            role = data.role as UserRole;
+            institutionId = data.institutionId || institutionId;
+            institutionName = data.institutionName || institutionName;
+          }
         }
+      } catch {
+        // Ignore Firestore errors (e.g. if Firestore is not enabled or collection does not exist)
       }
     }
 

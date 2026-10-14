@@ -99,19 +99,25 @@ async function main() {
   });
 
   console.log(`Updating Firestore users/${userRecord.uid} document...`);
-  await db.collection('users').doc(userRecord.uid).set(
-    {
-      uid: userRecord.uid,
-      email: userRecord.email,
-      displayName: userRecord.displayName || null,
-      photoURL: userRecord.photoURL || null,
-      role,
-      institutionId,
-      institutionName,
-      updatedAt: new Date().toISOString(),
-    },
-    { merge: true }
-  );
+  try {
+    await db.collection('users').doc(userRecord.uid).set(
+      {
+        uid: userRecord.uid,
+        email: userRecord.email,
+        displayName: userRecord.displayName || null,
+        photoURL: userRecord.photoURL || null,
+        role,
+        institutionId,
+        institutionName,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    console.log(`Firestore user profile synced.`);
+  } catch (dbErr) {
+    console.warn(`[Notice] Firestore update skipped (${dbErr.message}).`);
+    console.warn(`Auth custom claims are active. If you wish to use Firestore database persistence, enable Cloud Firestore in your Firebase console.`);
+  }
 
   console.log(`\nSuccessfully granted role '${role}' to ${userRecord.email}!`);
   console.log(`Institution: ${institutionName} (${institutionId})`);

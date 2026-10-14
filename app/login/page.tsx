@@ -24,21 +24,39 @@ export default function LoginPage() {
     useAuth();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isStaff = role === "university_admin" || role === "issuer";
+
+  React.useEffect(() => {
+    if (!loading && user && isStaff) {
+      router.push("/dashboard");
+    }
+  }, [user, isStaff, loading, router]);
 
   const handleSignIn = async () => {
     setErrorMsg(null);
     setSigningIn(true);
     try {
       await signInWithGoogle();
-      // If user has staff role, redirect to dashboard
-      // Note: useEffect or component re-render will handle it
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Sign in failed";
       setErrorMsg(msg);
     } finally {
       setSigningIn(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setErrorMsg(null);
+    setRefreshing(true);
+    try {
+      await refreshRole();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Refresh failed";
+      setErrorMsg(msg);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -166,10 +184,18 @@ export default function LoginPage() {
 
                 <div className="flex space-x-3 pt-2">
                   <button
-                    onClick={refreshRole}
-                    className="flex-1 py-2.5 px-3 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-deep transition-all"
+                    onClick={handleRefresh}
+                    disabled={refreshing || loading}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-deep transition-all flex items-center justify-center space-x-1.5 disabled:opacity-60"
                   >
-                    Refresh Authorization
+                    {refreshing ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Refreshing...</span>
+                      </>
+                    ) : (
+                      <span>Refresh Authorization</span>
+                    )}
                   </button>
                   <button
                     onClick={handleSignOut}

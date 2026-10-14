@@ -40,9 +40,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const isConfigured = isFirebaseClientConfigured();
 
-  const fetchUserRole = async (currentUser: User) => {
+  const fetchUserRole = async (currentUser: User, forceRefresh: boolean = false) => {
     try {
-      const idToken = await currentUser.getIdToken();
+      const idToken = await currentUser.getIdToken(forceRefresh);
       const res = await fetch("/api/auth/session", {
         headers: {
           Authorization: `Bearer ${idToken}`,
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        await fetchUserRole(currentUser);
+        await fetchUserRole(currentUser, true);
       } else {
         setRole("none");
         setInstitutionId(undefined);
@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       if (result.user) {
-        await fetchUserRole(result.user);
+        await fetchUserRole(result.user, true);
       }
     } finally {
       setLoading(false);
@@ -112,7 +112,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshRole = async () => {
     if (user) {
-      await fetchUserRole(user);
+      setLoading(true);
+      try {
+        await fetchUserRole(user, true);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 

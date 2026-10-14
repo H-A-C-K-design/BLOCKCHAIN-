@@ -26,8 +26,9 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, role, institutionName, loading, isConfigured, signOut } = useAuth();
+  const { user, role, institutionName, loading, isConfigured, signOut, refreshRole } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const isStaff = role === "university_admin" || role === "issuer";
 
@@ -63,15 +64,36 @@ export default function DashboardLayout({
             the university_admin or issuer role.
           </p>
           <div className="pt-2 flex flex-col space-y-2">
+            <button
+              onClick={async () => {
+                setRefreshing(true);
+                try {
+                  await refreshRole();
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+              disabled={refreshing}
+              className="py-2.5 px-4 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-deep disabled:opacity-60 flex items-center justify-center space-x-1.5"
+            >
+              {refreshing ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Refreshing...</span>
+                </>
+              ) : (
+                <span>Refresh Authorization</span>
+              )}
+            </button>
             <Link
               href="/login"
-              className="py-2.5 px-4 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-deep"
+              className="py-2.5 px-4 rounded-xl border border-brand-border text-brand-muted text-xs hover:text-brand-text text-center"
             >
               Back to Sign In
             </Link>
             <button
               onClick={() => signOut()}
-              className="py-2 px-4 rounded-xl border border-brand-border text-brand-muted text-xs hover:text-brand-text"
+              className="py-2 px-4 rounded-xl text-brand-muted text-xs hover:text-brand-error"
             >
               Sign Out
             </button>
