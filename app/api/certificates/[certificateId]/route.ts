@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, isAuthorizedIssuer } from "@/lib/auth/authorization";
-import { adminDb, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
+import { getCertificateRecord } from "@/lib/db/certificateStore";
 import { readOnChainCertificate } from "@/lib/blockchain/contract";
 import { getBlockExplorerTxUrl } from "@/lib/blockchain/client";
 import QRCode from "qrcode";
@@ -23,18 +23,7 @@ export async function GET(
   }
 
   const certificateId = params.certificateId;
-  let record = null;
-
-  if (isFirebaseAdminConfigured() && adminDb) {
-    try {
-      const doc = await adminDb.collection("certificates").doc(certificateId).get();
-      if (doc.exists) {
-        record = doc.data();
-      }
-    } catch (e) {
-      console.error("Firestore get error:", e);
-    }
-  }
+  const record = await getCertificateRecord(certificateId);
 
   // Also query on-chain status
   const chainResult = await readOnChainCertificate(certificateId);

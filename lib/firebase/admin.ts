@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 
 export function isFirebaseAdminConfigured(): boolean {
   return Boolean(
@@ -39,7 +40,12 @@ if (isFirebaseAdminConfigured()) {
     }
 
     adminAuth = admin.auth(adminApp);
-    adminDb = admin.firestore(adminApp);
+    const databaseId = process.env.FIREBASE_ADMIN_DATABASE_ID || "default";
+    try {
+      adminDb = getFirestore(adminApp, databaseId);
+    } catch {
+      adminDb = admin.firestore(adminApp);
+    }
   } catch (err) {
     console.error("Failed to initialize Firebase Admin SDK:", err);
   }

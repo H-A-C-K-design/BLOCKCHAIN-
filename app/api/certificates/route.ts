@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest, isAuthorizedIssuer } from "@/lib/auth/authorization";
 import { IssueCertificateSchema } from "@/lib/validation/certificate";
 import { issueCertificateWorkflow } from "@/lib/certificates/service";
-import { adminDb, isFirebaseAdminConfigured } from "@/lib/firebase/admin";
+import { listCertificateRecords } from "@/lib/db/certificateStore";
 import { CertificateRecord } from "@/lib/types/certificate";
 
 export const dynamic = "force-dynamic";
@@ -22,40 +22,20 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!isFirebaseAdminConfigured() || !adminDb) {
-    return NextResponse.json({
-      certificates: [],
-      total: 0,
-      notice: "Firestore is not configured. Configure FIREBASE_ADMIN credentials to view stored records.",
-    });
-  }
-
   try {
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get("q")?.toLowerCase().trim();
 
-    const snapshot = await adminDb
-      .collection("certificates")
-      .where("institutionId", "==", authResult.user.institutionId || "institution-main")
-      .orderBy("createdAt", "desc")
-      .limit(50)
-      .get();
-
-    let certificates: CertificateRecord[] = snapshot.docs.map((doc) => doc.data() as CertificateRecord);
-
-    if (query) {
-      certificates = certificates.filter(
-        (c) =>
-          c.certificateId.toLowerCase().includes(query) ||
-          c.studentIdRef.toLowerCase().includes(query) ||
-          c.studentName.toLowerCase().includes(query) ||
-          c.course.toLowerCase().includes(query)
-      );
-    }
+    const { certificates, firestoreActive, notice } = await listCertificateRecords(
+      authResult.user.institutionId || "institution-main",
+      query
+    );
 
     return NextResponse.json({
       certificates,
       total: certificates.length,
+      firestoreActive,
+      notice,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Database fetch error";

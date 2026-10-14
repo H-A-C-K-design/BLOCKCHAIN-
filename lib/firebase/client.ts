@@ -29,7 +29,12 @@ if (isFirebaseClientConfigured()) {
   try {
     app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
     auth = getAuth(app);
-    db = getFirestore(app);
+    const databaseId = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || "default";
+    try {
+      db = getFirestore(app, databaseId);
+    } catch {
+      db = getFirestore(app);
+    }
     googleProvider = new GoogleAuthProvider();
     googleProvider.setCustomParameters({ prompt: "select_account" });
   } catch (err) {

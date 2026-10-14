@@ -29,6 +29,7 @@ export default function CertificatesListPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "REVOKED">("ALL");
+  const [dbNotice, setDbNotice] = useState<string | null>(null);
 
   // Selected certificate for detail modal
   const [selectedCert, setSelectedCert] = useState<CertificateRecord | null>(null);
@@ -50,6 +51,11 @@ export default function CertificatesListPage() {
         if (res.ok) {
           const data = await res.json();
           setCertificates(data.certificates || []);
+          if (data.notice) {
+            setDbNotice(data.notice);
+          } else {
+            setDbNotice(null);
+          }
         }
       } catch (err) {
         console.error("Failed to load certificates:", err);
@@ -113,6 +119,30 @@ export default function CertificatesListPage() {
           <span>Issue Certificate</span>
         </Link>
       </div>
+
+      {/* Database Notice Banner */}
+      {dbNotice && (
+        <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-subtle">
+          <div className="flex items-start space-x-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <p className="font-semibold">{dbNotice}</p>
+              <p className="text-[11px] text-amber-700">
+                Certificates are permanently stored and retrievable via the local persistent database store.
+              </p>
+            </div>
+          </div>
+          <a
+            href={`https://console.firebase.google.com/project/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "electro-mart-b2333"}/firestore`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-950 font-semibold text-xs shrink-0 transition-colors"
+          >
+            <span>Create Firestore DB</span>
+            <ExternalLink className="w-3.5 h-3.5 ml-0.5" />
+          </a>
+        </div>
+      )}
 
       {/* Search & Filter Toolbar */}
       <div className="bg-white rounded-2xl border border-brand-border p-4 shadow-subtle flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">

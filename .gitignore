@@ -34,3 +34,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local persistent store (keep directory, ignore dynamic database data)
+/data/*
+!/data/.gitkeep

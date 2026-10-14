@@ -57,8 +57,15 @@ if (admin.apps.length === 0) {
   });
 }
 
+const { getFirestore } = require('firebase-admin/firestore');
 const auth = admin.auth();
-const db = admin.firestore();
+const databaseId = process.env.FIREBASE_ADMIN_DATABASE_ID || 'default';
+let db;
+try {
+  db = getFirestore(admin.app(), databaseId);
+} catch {
+  db = admin.firestore();
+}
 
 async function main() {
   const args = process.argv.slice(2);
@@ -98,25 +105,47 @@ async function main() {
     institutionName,
   });
 
+  const userProfile = {
+    uid: userRecord.uid,
+    email: userRecord.email,
+    displayName: userRecord.displayName || null,
+    photoURL: userRecord.photoURL || null,
+    role,
+    institutionId,
+    institutionName,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // 1. Sync to local persistent store
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const dataDir = path.resolve(__dirname, '../data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const usersFile = path.join(dataDir, 'users.json');
+    let usersData = {};
+    if (fs.existsSync(usersFile)) {
+      try {
+        usersData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+      } catch (e) {}
+    }
+    usersData[userRecord.uid] = userProfile;
+    fs.writeFileSync(usersFile, JSON.stringify(usersData, null, 2), 'utf8');
+    console.log(`Local user store synced to data/users.json`);
+  } catch (fsErr) {
+    console.warn(`Local user store write warning:`, fsErr.message);
+  }
+
+  // 2. Sync to Cloud Firestore if enabled
   console.log(`Updating Firestore users/${userRecord.uid} document...`);
   try {
-    await db.collection('users').doc(userRecord.uid).set(
-      {
-        uid: userRecord.uid,
-        email: userRecord.email,
-        displayName: userRecord.displayName || null,
-        photoURL: userRecord.photoURL || null,
-        role,
-        institutionId,
-        institutionName,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    await db.collection('users').doc(userRecord.uid).set(userProfile, { merge: true });
     console.log(`Firestore user profile synced.`);
   } catch (dbErr) {
     console.warn(`[Notice] Firestore update skipped (${dbErr.message}).`);
-    console.warn(`Auth custom claims are active. If you wish to use Firestore database persistence, enable Cloud Firestore in your Firebase console.`);
+    console.warn(`Auth custom claims are active and user stored in local database. To enable Firestore, create the database in your Firebase console.`);
   }
 
   console.log(`\nSuccessfully granted role '${role}' to ${userRecord.email}!`);

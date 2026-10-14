@@ -1,4 +1,5 @@
 import { adminAuth, adminDb, isFirebaseAdminConfigured } from "../firebase/admin";
+import { getUserProfileFromLocal } from "../db/certificateStore";
 import { UserRole } from "../types/certificate";
 
 export interface AuthenticatedUser {
@@ -39,20 +40,32 @@ export async function authenticateRequest(
 
     if (decoded.role === "university_admin" || decoded.role === "issuer" || decoded.role === "verifier") {
       role = decoded.role as UserRole;
-    } else if (adminDb) {
+    } else {
       // Check user document in Firestore as fallback
-      try {
-        const userDoc = await adminDb.collection("users").doc(decoded.uid).get();
-        if (userDoc.exists) {
-          const data = userDoc.data();
-          if (data?.role) {
-            role = data.role as UserRole;
-            institutionId = data.institutionId || institutionId;
-            institutionName = data.institutionName || institutionName;
+      if (adminDb) {
+        try {
+          const userDoc = await adminDb.collection("users").doc(decoded.uid).get();
+          if (userDoc.exists) {
+            const data = userDoc.data();
+            if (data?.role) {
+              role = data.role as UserRole;
+              institutionId = data.institutionId || institutionId;
+              institutionName = data.institutionName || institutionName;
+            }
           }
+        } catch {
+          // Ignore Firestore errors (e.g. if Firestore is not enabled or collection does not exist)
         }
-      } catch {
-        // Ignore Firestore errors (e.g. if Firestore is not enabled or collection does not exist)
+      }
+
+      // If still none, check local user profile fallback
+      if (role === "none") {
+        const localUser = getUserProfileFromLocal(decoded.uid);
+        if (localUser?.role) {
+          role = localUser.role as UserRole;
+          institutionId = localUser.institutionId || institutionId;
+          institutionName = localUser.institutionName || institutionName;
+        }
       }
     }
 

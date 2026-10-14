@@ -1,4 +1,10 @@
 import { adminDb, isFirebaseAdminConfigured } from "../firebase/admin";
+import {
+  saveCertificateRecord,
+  getCertificateRecord,
+  updateCertificateStatus,
+  logAuditEvent,
+} from "../db/certificateStore";
 import { calculateSha256Server, areHashesEqual } from "../crypto/sha256";
 import { uploadPdfToIpfs, isIpfsConfigured } from "../ipfs/provider";
 import {
@@ -58,7 +64,7 @@ export interface IssueCertificateResult {
  * 1. Hashes exact PDF bytes with SHA-256
  * 2. Uploads to IPFS (if configured)
  * 3. Submits on-chain transaction (if configured)
- * 4. Stores metadata record in Firestore
+ * 4. Stores metadata record in Firestore and local persistent store
  */
 export async function issueCertificateWorkflow(
   input: IssueCertificateInput,
@@ -138,26 +144,21 @@ export async function issueCertificateWorkflow(
     updatedAt: now,
   };
 
-  // 4. Save record in Firestore if configured
-  if (isFirebaseAdminConfigured() && adminDb) {
-    try {
-      await adminDb.collection("certificates").doc(certificateId).set(record);
-      await adminDb.collection("auditEvents").add({
-        type: "CERTIFICATE_ISSUED",
-        certificateId,
-        issuerUid: user.uid,
-        issuerEmail: user.email,
-        institutionId: record.institutionId,
-        pdfHash,
-        transactionHash,
-        timestamp: now,
-      });
-    } catch (err) {
-      console.error("Firestore persistence error:", err);
-      warnings.push("Database persistence had an issue, but local record generated.");
-    }
-  } else {
-    warnings.push("Firebase Admin not configured; certificate record was not saved to Firestore.");
+  // 4. Save record in database (Firestore with local persistent fallback)
+  const saveResult = await saveCertificateRecord(record);
+  await logAuditEvent({
+    type: "CERTIFICATE_ISSUED",
+    certificateId,
+    issuerUid: user.uid,
+    issuerEmail: user.email,
+    institutionId: record.institutionId,
+    pdfHash,
+    transactionHash,
+    timestamp: now,
+  });
+
+  if (saveResult.notice) {
+    warnings.push(saveResult.notice);
   }
 
   return {
@@ -171,7 +172,7 @@ export async function issueCertificateWorkflow(
 }
 
 /**
- * Revokes a certificate by writing revocation to the contract and updating Firestore.
+ * Revokes a certificate by writing revocation to the contract and updating database.
  */
 export async function revokeCertificateWorkflow(
   certificateId: string,
@@ -191,38 +192,31 @@ export async function revokeCertificateWorkflow(
 
   const now = new Date().toISOString();
 
-  // 2. Update Firestore record
-  if (isFirebaseAdminConfigured() && adminDb) {
-    try {
-      const docRef = adminDb.collection("certificates").doc(certificateId);
-      await docRef.update({
-        status: "REVOKED",
-        revokedAt: now,
-        revocationReason: reason,
-        revokedByUid: user.uid,
-        updatedAt: now,
-      });
+  // 2. Update database record (Firestore + persistent store)
+  await updateCertificateStatus(certificateId, {
+    status: "REVOKED",
+    revokedAt: now,
+    revocationReason: reason,
+    revokedByUid: user.uid,
+    updatedAt: now,
+  });
 
-      await adminDb.collection("auditEvents").add({
-        type: "CERTIFICATE_REVOKED",
-        certificateId,
-        revokedByUid: user.uid,
-        revokedByEmail: user.email,
-        reason,
-        txHash: txHash || null,
-        timestamp: now,
-      });
-    } catch (err) {
-      console.error("Firestore revocation update error:", err);
-    }
-  }
+  await logAuditEvent({
+    type: "CERTIFICATE_REVOKED",
+    certificateId,
+    revokedByUid: user.uid,
+    revokedByEmail: user.email,
+    reason,
+    txHash: txHash || null,
+    timestamp: now,
+  });
 
   return { success: true, txHash };
 }
 
 /**
  * Public Certificate Verification
- * Source of truth: Smart Contract when configured, backed by Firestore metadata
+ * Source of truth: Smart Contract when configured, backed by database metadata
  */
 export async function verifyCertificateWorkflow(
   certificateId: string,
@@ -250,17 +244,12 @@ export async function verifyCertificateWorkflow(
     }
   }
 
-  // 2. Query Firestore record for metadata
+  // 2. Query certificate record from database for metadata
   let dbRecord: CertificateRecord | null = null;
-  if (isFirebaseAdminConfigured() && adminDb) {
-    try {
-      const doc = await adminDb.collection("certificates").doc(certificateId).get();
-      if (doc.exists) {
-        dbRecord = doc.data() as CertificateRecord;
-      }
-    } catch (err) {
-      console.error("Firestore read error:", err);
-    }
+  try {
+    dbRecord = await getCertificateRecord(certificateId);
+  } catch (err) {
+    console.error("Database read error:", err);
   }
 
   // If blockchain error occurred and we couldn't query chain
