@@ -94,8 +94,17 @@ async function main() {
       userRecord = await auth.getUser(identifier);
     }
   } catch (err) {
-    console.error(`User not found: ${err.message}`);
-    process.exit(1);
+    if (err.code === 'auth/user-not-found' && identifier.includes('@')) {
+      console.log(`User '${identifier}' not found in Firebase Auth. Creating user account...`);
+      userRecord = await auth.createUser({
+        email: identifier,
+        emailVerified: true,
+      });
+      console.log(`Created user ${userRecord.uid} for ${identifier}.`);
+    } else {
+      console.error(`User not found: ${err.message}`);
+      process.exit(1);
+    }
   }
 
   console.log(`Setting custom claims for user ${userRecord.email} (${userRecord.uid})...`);

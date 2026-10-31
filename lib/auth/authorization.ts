@@ -1,5 +1,5 @@
 import { adminAuth, adminDb, isFirebaseAdminConfigured } from "../firebase/admin";
-import { getUserProfileFromLocal } from "../db/certificateStore";
+import { getUserProfileFromLocal, getUserProfileByEmailFromLocal } from "../db/certificateStore";
 import { UserRole } from "../types/certificate";
 
 export interface AuthenticatedUser {
@@ -58,13 +58,36 @@ export async function authenticateRequest(
         }
       }
 
-      // If still none, check local user profile fallback
+      // If still none, check local user profile fallback (by UID or email)
       if (role === "none") {
-        const localUser = getUserProfileFromLocal(decoded.uid);
+        const localUser =
+          getUserProfileFromLocal(decoded.uid) ||
+          (decoded.email ? getUserProfileByEmailFromLocal(decoded.email) : null);
         if (localUser?.role) {
           role = localUser.role as UserRole;
           institutionId = localUser.institutionId || institutionId;
           institutionName = localUser.institutionName || institutionName;
+        }
+      }
+
+      // Check pre-authorized admin emails fallback
+      if (role === "none" && decoded.email) {
+        const adminEmails = (process.env.ADMIN_EMAILS || "")
+          .split(",")
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean);
+        if (adminEmails.includes(decoded.email.toLowerCase())) {
+          role = "university_admin";
+          // Asynchronously update Firebase custom claims for subsequent token refreshes
+          if (adminAuth) {
+            adminAuth
+              .setCustomUserClaims(decoded.uid, {
+                role,
+                institutionId,
+                institutionName,
+              })
+              .catch(() => {});
+          }
         }
       }
     }

@@ -132,6 +132,17 @@ export function getUserProfileFromLocal(uid: string): any | null {
   return users[uid] || null;
 }
 
+export function getUserProfileByEmailFromLocal(email: string): any | null {
+  if (!email) return null;
+  const users = readJsonSafe<Record<string, any>>(USERS_FILE, {});
+  const target = email.toLowerCase();
+  return (
+    Object.values(users).find(
+      (u: any) => u.email && u.email.toLowerCase() === target
+    ) || null
+  );
+}
+
 export function getFirestoreSetupUrl(): string {
   const projectId =
     process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;

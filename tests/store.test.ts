@@ -8,6 +8,7 @@ import {
   updateCertificateStatus,
   saveUserProfileToLocal,
   getUserProfileFromLocal,
+  getUserProfileByEmailFromLocal,
 } from "../lib/db/certificateStore";
 import { CertificateRecord } from "../lib/types/certificate";
 
@@ -97,5 +98,9 @@ describe("Certificate Database Store", () => {
     expect(loaded).not.toBeNull();
     expect(loaded.email).toBe("test@university.edu");
     expect(loaded.role).toBe("university_admin");
+
+    const loadedByEmail = getUserProfileByEmailFromLocal("TEST@university.edu");
+    expect(loadedByEmail).not.toBeNull();
+    expect(loadedByEmail.uid).toBe("user-test-456");
   });
 });
